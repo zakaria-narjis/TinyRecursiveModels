@@ -1,0 +1,10 @@
+.vscode
+data/
+# pycache
+__pycache__/
+*.py[cod]
+*$py.class
+# distribution / packaging
+.Python
+checkpoints/
+build/
