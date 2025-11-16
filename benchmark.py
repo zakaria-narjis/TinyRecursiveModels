@@ -26,7 +26,7 @@ DATA_PATH = "data/sudoku-extreme-1k-aug-1000"
 
 # Hyperparameters to experiment with
 INFERENCE_CONFIG = {
-    "halt_max_steps": 16,  # Try: 8, 16, 32, 64
+    "halt_max_steps": 2,  # Try: 8, 16, 32, 64
     "H_cycles": 3,          # Try: 1, 2, 3, 4, 5
     "L_cycles": 6,          # Try: 3, 6, 9, 12
     "batch_size": 1024,     # Try: 32, 64, 128, 256, 512, 1024
@@ -447,61 +447,94 @@ def evaluate_with_config(
 
 if __name__ == "__main__":
     # Single evaluation - process ALL batches
-    results = evaluate_with_config(
-        checkpoint_path=CHECKPOINT_PATH,
-        data_path=DATA_PATH,
-        halt_max_steps=INFERENCE_CONFIG["halt_max_steps"],
-        H_cycles=INFERENCE_CONFIG["H_cycles"],
-        L_cycles=INFERENCE_CONFIG["L_cycles"],
-        batch_size=INFERENCE_CONFIG["batch_size"],
-        max_batches=None,  # Process all batches
-        compile_model=False,
-    )
+    # results = evaluate_with_config(
+    #     checkpoint_path=CHECKPOINT_PATH,
+    #     data_path=DATA_PATH,
+    #     halt_max_steps=INFERENCE_CONFIG["halt_max_steps"],
+    #     H_cycles=INFERENCE_CONFIG["H_cycles"],
+    #     L_cycles=INFERENCE_CONFIG["L_cycles"],
+    #     batch_size=INFERENCE_CONFIG["batch_size"],
+    #     max_batches=None,  # Process all batches
+    #     compile_model=False,
+    # )
 
 # ============================================================================
 # Grid Search
 # ============================================================================
 
-def grid_search():
-    """Run grid search over hyperparameters."""
-    
-    experiments = [
-        {"halt_max_steps": 8, "H_cycles": 2, "L_cycles": 4},
-        {"halt_max_steps": 16, "H_cycles": 3, "L_cycles": 6},
-        {"halt_max_steps": 32, "H_cycles": 4, "L_cycles": 8},
-        {"halt_max_steps": 64, "H_cycles": 5, "L_cycles": 10},
-    ]
-    
-    all_results = []
-    
-    for exp_config in experiments:
-        print(f"\n\n{'=' * 100}")
-        print(f"EXPERIMENT: {exp_config}")
-        print(f"{'=' * 100}\n")
+    def grid_search():
+        """Run grid search over hyperparameters."""
         
-        results = evaluate_with_config(
-            checkpoint_path=CHECKPOINT_PATH,
-            data_path=DATA_PATH,
-            batch_size=1024,
-            max_batches=None,  # Full evaluation
-            **exp_config
-        )
+        experiments = [
+            {"halt_max_steps": 1, "H_cycles": 3, "L_cycles": 6},
+            {"halt_max_steps": 2, "H_cycles": 3, "L_cycles": 6},
+            {"halt_max_steps": 4, "H_cycles": 3, "L_cycles": 6},
+            {"halt_max_steps": 16, "H_cycles": 3, "L_cycles": 6},
+            {"halt_max_steps": 32, "H_cycles": 3, "L_cycles": 6},
+            {"halt_max_steps": 16, "H_cycles": 1, "L_cycles": 6},
+            {"halt_max_steps": 16, "H_cycles": 3, "L_cycles": 1},
+            {"halt_max_steps": 1, "H_cycles": 1, "L_cycles": 1},
+        ]
         
-        results["config"] = exp_config
-        all_results.append(results)
-    
-    # Print comparison
-    print("\n\n" + "=" * 100)
-    print("COMPARISON OF ALL EXPERIMENTS")
-    print("=" * 100)
-    
-    for i, (exp, res) in enumerate(zip(experiments, all_results)):
-        print(f"\nExperiment {i+1}: {exp}")
-        print(f"  Token Accuracy: {res['token_accuracy']:.4f}")
-        print(f"  Exact Accuracy: {res['exact_accuracy']:.4f}")
-        print(f"  Avg Steps: {res['avg_inference_steps']:.2f}")
-    
-    return all_results
+        all_results = []
+        
+        for exp_config in experiments:
+            print(f"\n\n{'=' * 100}")
+            print(f"EXPERIMENT: {exp_config}")
+            print(f"{'=' * 100}\n")
+            
+            results = evaluate_with_config(
+                checkpoint_path=CHECKPOINT_PATH,
+                data_path=DATA_PATH,
+                batch_size=1024,
+                max_batches=None,  # Full evaluation
+                **exp_config
+            )
+            
+            results["config"] = exp_config
+            all_results.append(results)
+        
+        print("\n\n" + "=" * 100)
+        print("COMPARISON OF ALL EXPERIMENTS")
+        print("=" * 100)
+        
+        for i, (exp, res) in enumerate(zip(experiments, all_results)):
+            print(f"\nExperiment {i+1}: {exp}")
+            print(f"  Token Accuracy: {res['token_accuracy']:.4f}")
+            print(f"  Exact Accuracy: {res['exact_accuracy']:.4f}")
+            print(f"  Avg Steps: {res['avg_inference_steps']:.2f}")
 
-# Uncomment to run grid search
-# results = grid_search()
+        # ======================================================
+        # ADD THIS CODE TO SAVE THE RESULTS
+        # ======================================================
+        print("\n" + "=" * 100)
+        print("SAVING RESULTS")
+        print("=" * 100)
+        
+        # Create a clean list for saving (excluding bulky per-batch metrics)
+        results_to_save = []
+        for res in all_results:
+            clean_res = res.copy()
+            clean_res.pop('per_batch_metrics', None)  # Safely remove the large list
+            results_to_save.append(clean_res)
+            
+        save_filename = "grid_search_results.json"
+        print(f"Saving summary of results to {save_filename}...")
+        
+        try:
+            # The 'json' module is already imported at the top of your file
+            with open(save_filename, "w") as f:
+                json.dump(results_to_save, f, indent=4)
+            print(f"✓ Successfully saved results to {save_filename}")
+        except Exception as e:
+            print(f"⚠ An error occurred while saving results: {e}")
+        # ======================================================
+        # END OF ADDED CODE
+        # ======================================================
+        
+        return all_results
+
+    # --- UNCOMMENT AND RUN THE GRID SEARCH ---
+    print("STARTING GRID SEARCH...")
+    results = grid_search()
+    print("\nGRID SEARCH COMPLETE.")
