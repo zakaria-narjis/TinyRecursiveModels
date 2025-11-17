@@ -466,14 +466,7 @@ if __name__ == "__main__":
         """Run grid search over hyperparameters."""
         
         experiments = [
-            {"halt_max_steps": 1, "H_cycles": 3, "L_cycles": 6},
-            {"halt_max_steps": 2, "H_cycles": 3, "L_cycles": 6},
-            {"halt_max_steps": 4, "H_cycles": 3, "L_cycles": 6},
-            {"halt_max_steps": 16, "H_cycles": 3, "L_cycles": 6},
-            {"halt_max_steps": 32, "H_cycles": 3, "L_cycles": 6},
-            {"halt_max_steps": 16, "H_cycles": 1, "L_cycles": 6},
-            {"halt_max_steps": 16, "H_cycles": 3, "L_cycles": 1},
-            {"halt_max_steps": 1, "H_cycles": 1, "L_cycles": 1},
+            {"halt_max_steps": 32, "H_cycles": 2, "L_cycles": 2},
         ]
         
         all_results = []
