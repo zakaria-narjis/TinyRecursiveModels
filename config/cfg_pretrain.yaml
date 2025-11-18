@@ -1,5 +1,5 @@
 # ARC training config
-seed: 42
+
 defaults:
   - arch: trm
   - _self_
