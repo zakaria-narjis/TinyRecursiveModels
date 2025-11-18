@@ -22,6 +22,20 @@ from puzzle_dataset import PuzzleDataset, PuzzleDatasetConfig, PuzzleDatasetMeta
 from utils.functions import load_model_class, get_model_source_path
 from models.sparse_embedding import CastedSparseEmbeddingSignSGD_Distributed
 from models.ema import EMAHelper
+import random
+import numpy as np
+
+def set_random_seed(seed: int):
+    """
+    Fix random seeds for reproducibility across torch, numpy, and python.random.
+    """
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)  # if using multiple GPUs
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
 
 
 class LossConfig(pydantic.BaseModel):
@@ -536,6 +550,7 @@ def launch(hydra_config: DictConfig):
     RANK = 0
     WORLD_SIZE = 1
     CPU_PROCESS_GROUP = None
+    set_random_seed(config.seed + RANK)
 
     # Initialize distributed training if in distributed environment (e.g. torchrun)
     if "LOCAL_RANK" in os.environ:
@@ -555,9 +570,6 @@ def launch(hydra_config: DictConfig):
 
     # Load sync'ed config
     config = load_synced_config(hydra_config, rank=RANK, world_size=WORLD_SIZE)
-
-    # Seed RNGs to ensure consistency
-    torch.random.manual_seed(config.seed + RANK)
 
     # Dataset
     train_epochs_per_iter = config.eval_interval if config.eval_interval is not None else config.epochs
