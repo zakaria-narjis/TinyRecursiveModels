@@ -284,6 +284,7 @@ class TinyRecursiveReasoningModel_ACTV1(nn.Module):
 
                 # Exploration
                 min_halt_steps = (torch.rand_like(q_halt_logits) < self.config.halt_exploration_prob) * torch.randint_like(new_steps, low=2, high=self.config.halt_max_steps + 1)
+                min_halt_steps = torch.maximum(min_halt_steps, torch.ones_like(new_steps) * 4) # ensure at least 4 steps before exploration halt  prevent q halt from colapsing to 1 step
                 halted = halted & (new_steps >= min_halt_steps)
 
                 if not self.config.no_ACT_continue:
