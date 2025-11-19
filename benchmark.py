@@ -466,7 +466,7 @@ if __name__ == "__main__":
         """Run grid search over hyperparameters."""
         
         experiments = [
-            {"halt_max_steps": 32, "H_cycles": 2, "L_cycles": 2},
+            {"halt_max_steps": 32, "H_cycles": 32, "L_cycles": 2},
         ]
         
         all_results = []
