@@ -150,8 +150,12 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
         self.L_level = TinyRecursiveReasoningModel_ACTV1ReasoningModule(layers=[TinyRecursiveReasoningModel_ACTV1Block(self.config) for _i in range(self.config.L_layers)])
 
         # Initial states
-        self.H_init = nn.Buffer(trunc_normal_init_(torch.empty(self.config.hidden_size, dtype=self.forward_dtype), std=1), persistent=True)
-        self.L_init = nn.Buffer(trunc_normal_init_(torch.empty(self.config.hidden_size, dtype=self.forward_dtype), std=1), persistent=True)
+        if self.config.latent_init_random:
+            self.H_init = nn.Buffer(trunc_normal_init_(torch.empty(self.config.hidden_size, dtype=self.forward_dtype), std=1), persistent=True)
+            self.L_init = nn.Buffer(trunc_normal_init_(torch.empty(self.config.hidden_size, dtype=self.forward_dtype), std=1), persistent=True)
+        else:
+            self.H_init = nn.Buffer(torch.zeros(self.config.hidden_size, dtype=self.forward_dtype), persistent=True)
+            self.L_init = nn.Buffer(torch.zeros(self.config.hidden_size, dtype=self.forward_dtype), persistent=True)
 
         # Q head special init
         # Init Q to (almost) zero for faster learning during bootstrapping
@@ -284,7 +288,7 @@ class TinyRecursiveReasoningModel_ACTV1(nn.Module):
 
                 # Exploration
                 min_halt_steps = (torch.rand_like(q_halt_logits) < self.config.halt_exploration_prob) * torch.randint_like(new_steps, low=2, high=self.config.halt_max_steps + 1)
-                min_halt_steps = torch.maximum(min_halt_steps, torch.ones_like(new_steps) * 4) # ensure at least 4 steps before exploration halt  prevent q halt from colapsing to 1 step
+                # min_halt_steps = torch.maximum(min_halt_steps, torch.ones_like(new_steps) * 4) # ensure at least 4 steps before exploration halt  prevent q halt from colapsing to 1 step
                 halted = halted & (new_steps >= min_halt_steps)
 
                 if not self.config.no_ACT_continue:

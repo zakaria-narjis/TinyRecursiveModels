@@ -17,7 +17,7 @@ num_heads: 8  # min(2, hidden_size // 64)
 expansion: 4
 
 puzzle_emb_ndim: ${.hidden_size}
-
+latent_init_random: False # if true, init latents with random normal, else zeros
 pos_encodings: rope
 forward_dtype: bfloat16
 
