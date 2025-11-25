@@ -50,7 +50,7 @@ class TinyRecursiveReasoningModel_ACTV1Config(BaseModel):
 
     rms_norm_eps: float = 1e-5
     rope_theta: float = 10000.0
-    
+    latent_init_random: bool
     # Halting Q-learning config
     halt_max_steps: int
     halt_exploration_prob: float
@@ -61,7 +61,7 @@ class TinyRecursiveReasoningModel_ACTV1Config(BaseModel):
     mlp_t: bool = False # use mlp on L instead of transformer
     puzzle_emb_len: int = 16 # if non-zero, its specified to this value
     no_ACT_continue: bool =  True # No continue ACT loss, only use the sigmoid of the halt which makes much more sense
-
+    last_outer_loop: bool # whether to do an extra L step without input at the end of each H cycle
 class TinyRecursiveReasoningModel_ACTV1Block(nn.Module):
     def __init__(self, config: TinyRecursiveReasoningModel_ACTV1Config) -> None:
         super().__init__()
@@ -203,15 +203,23 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
         it = 0
         z_L = carry.z_L
         # H_cycles-1 without grad
-        with torch.no_grad():
-            for _H_step in range(self.config.H_cycles-1):
+        if self.config.last_outer_loop:
+            with torch.no_grad():
+                for _H_step in range(self.config.H_cycles-1):
+                    for _L_step in range(self.config.L_cycles):
+                        z_L = self.L_level(z_L + input_embeddings, **seq_info)
+                    z_L = self.L_level(z_L, **seq_info)
+            # 1 with grad
+            for _L_step in range(self.config.L_cycles):
+                z_L = self.L_level(z_L + input_embeddings, **seq_info)
+            z_L = self.L_level(z_L, **seq_info)
+        else:
+            with torch.no_grad():
                 for _L_step in range(self.config.L_cycles):
                     z_L = self.L_level(z_L + input_embeddings, **seq_info)
-                z_L = self.L_level(z_L, **seq_info)
-        # 1 with grad
-        for _L_step in range(self.config.L_cycles):
-            z_L = self.L_level(z_L + input_embeddings, **seq_info)
-        z_L = self.L_level(z_L, **seq_info)
+            # 1 with grad
+            for _L_step in range(self.config.L_cycles):
+                z_L = self.L_level(z_L + input_embeddings, **seq_info)
         z_out = z_L
 
         # LM Outputs

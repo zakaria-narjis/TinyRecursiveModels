@@ -50,7 +50,7 @@ class TinyRecursiveReasoningModel_ACTV1Config(BaseModel):
 
     rms_norm_eps: float = 1e-5
     rope_theta: float = 10000.0
-    
+    latent_init_random: bool
     # Halting Q-learning config
     halt_max_steps: int
     halt_exploration_prob: float
