@@ -62,6 +62,7 @@ class TinyRecursiveReasoningModel_ACTV1Config(BaseModel):
     puzzle_emb_len: int = 16 # if non-zero, its specified to this value
     no_ACT_continue: bool =  True # No continue ACT loss, only use the sigmoid of the halt which makes much more sense
     last_outer_loop: bool # whether to do an extra L step without input at the end of each H cycle
+    random_z_H: bool
 class TinyRecursiveReasoningModel_ACTV1Block(nn.Module):
     def __init__(self, config: TinyRecursiveReasoningModel_ACTV1Config) -> None:
         super().__init__()
@@ -204,15 +205,27 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
         z_L = carry.z_L
         # H_cycles-1 without grad
         if self.config.last_outer_loop:
-            with torch.no_grad():
-                for _H_step in range(self.config.H_cycles-1):
-                    for _L_step in range(self.config.L_cycles):
-                        z_L = self.L_level(z_L + input_embeddings, **seq_info)
-                    z_L = self.L_level(z_L, **seq_info)
-            # 1 with grad
-            for _L_step in range(self.config.L_cycles):
-                z_L = self.L_level(z_L + input_embeddings, **seq_info)
-            z_L = self.L_level(z_L, **seq_info)
+            if self.config.random_z_H:
+                random_z_H = trunc_normal_init_(torch.empty(self.config.hidden_size, dtype=self.forward_dtype), std=1)
+                with torch.no_grad():
+                    for _H_step in range(self.config.H_cycles-1):
+                        for _L_step in range(self.config.L_cycles):
+                            z_L = self.L_level(z_L + random_z_H + input_embeddings, **seq_info)
+                        z_L = self.L_level(z_L + random_z_H, **seq_info)
+                # 1 with grad
+                for _L_step in range(self.config.L_cycles):
+                    z_L = self.L_level(z_L + random_z_H+ input_embeddings, **seq_info)
+                z_L = self.L_level(z_L+ random_z_H, **seq_info)                
+            else:   
+                with torch.no_grad():
+                    for _H_step in range(self.config.H_cycles-1):
+                        for _L_step in range(self.config.L_cycles):
+                            z_L = self.L_level(z_L + input_embeddings, **seq_info)
+                        z_L = self.L_level(z_L, **seq_info)
+                # 1 with grad
+                for _L_step in range(self.config.L_cycles):
+                    z_L = self.L_level(z_L + input_embeddings, **seq_info)
+                z_L = self.L_level(z_L, **seq_info)
         else:
             with torch.no_grad():
                 for _L_step in range(self.config.L_cycles):
