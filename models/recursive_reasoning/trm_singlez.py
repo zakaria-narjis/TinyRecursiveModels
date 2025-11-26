@@ -206,7 +206,7 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
         # H_cycles-1 without grad
         if self.config.last_outer_loop:
             if self.config.random_z_H:
-                random_z_H = trunc_normal_init_(torch.empty(self.config.hidden_size, dtype=self.forward_dtype), std=1)
+                random_z_H = trunc_normal_init_(torch.empty(self.config.hidden_size, dtype=self.forward_dtype), std=1).to(z_L.device)
                 with torch.no_grad():
                     for _H_step in range(self.config.H_cycles-1):
                         for _L_step in range(self.config.L_cycles):
