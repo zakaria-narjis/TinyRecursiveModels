@@ -196,7 +196,16 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
             z_H=torch.where(reset_flag.view(-1, 1, 1), self.H_init, carry.z_H),
             z_L=torch.where(reset_flag.view(-1, 1, 1), self.L_init, carry.z_L),
         )
-
+    def generate_random_z_H(self, z_H):
+        with torch.no_grad():
+            B, S, D = z_H.shape
+            z_H = z_H.view(-1, D) # (B*S, D)
+            mu = z_H.mean(dim=0)
+            cov = torch.cov(z_H.T) + 1e-5 * torch.eye(D, device=z_H.device)  # stabilize
+            dist = torch.distributions.MultivariateNormal(mu, cov)
+            z_H = dist.sample((B*S,)).view(B, S, D)
+        return z_H
+    
     def forward(self, carry: TinyRecursiveReasoningModel_ACTV1InnerCarry, batch: Dict[str, torch.Tensor]) -> Tuple[TinyRecursiveReasoningModel_ACTV1InnerCarry, torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
         seq_info = dict(
             cos_sin=self.rotary_emb() if hasattr(self, "rotary_emb") else None,
@@ -210,28 +219,17 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
         z_H, z_L = carry.z_H, carry.z_L
         # H_cycles-1 without grad
         if self.config.random_z_H:
-
-            B, S, D = z_H.shape
-            z_H = z_H.view(-1, D)  # (B*S, D)
-            mu = z_H.mean(dim=0)
-            cov = torch.cov(z_H.T)  # D x D
-            dist = torch.distributions.MultivariateNormal(mu, cov)
-            z_H = dist.sample((B*S,)).view(B, S, D)
-
+            z_H = self.generate_random_z_H(z_H).to(z_L.device)
             with torch.no_grad():
                 for _H_step in range(self.config.H_cycles-1):
                     for _L_step in range(self.config.L_cycles):
                         z_L = self.L_level(z_L, z_H + input_embeddings, **seq_info)
                     z_H = self.L_level(z_H, z_L, **seq_info)
 
-            z_H = z_H.view(-1, D)  # (B*S, D)
-            mu = z_H.mean(dim=0)
-            cov = torch.cov(z_H.T)  # D x D
-            dist = torch.distributions.MultivariateNormal(mu, cov)
-            z_H = dist.sample((B*S,)).view(B, S, D)
+            z_H = self.generate_random_z_H(z_H).to(z_L.device)
             # 1 with grad
             for _L_step in range(self.config.L_cycles):
-                z_L = self.L_level(z_L, z_H + input_embeddings, **seq_info)
+                z_L = self.L_level(z_L, z_H + input_embeddings, **seq_info)          
             z_H = self.L_level(z_H, z_L, **seq_info)            
         else:
             with torch.no_grad():
