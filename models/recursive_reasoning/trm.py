@@ -61,7 +61,7 @@ class TinyRecursiveReasoningModel_ACTV1Config(BaseModel):
     mlp_t: bool = False # use mlp on L instead of transformer
     puzzle_emb_len: int = 16 # if non-zero, its specified to this value
     no_ACT_continue: bool =  True # No continue ACT loss, only use the sigmoid of the halt which makes much more sense
-
+    random_z_H: bool
 class TinyRecursiveReasoningModel_ACTV1Block(nn.Module):
     def __init__(self, config: TinyRecursiveReasoningModel_ACTV1Config) -> None:
         super().__init__()
@@ -209,15 +209,40 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
         it = 0
         z_H, z_L = carry.z_H, carry.z_L
         # H_cycles-1 without grad
-        with torch.no_grad():
-            for _H_step in range(self.config.H_cycles-1):
-                for _L_step in range(self.config.L_cycles):
-                    z_L = self.L_level(z_L, z_H + input_embeddings, **seq_info)
-                z_H = self.L_level(z_H, z_L, **seq_info)
-        # 1 with grad
-        for _L_step in range(self.config.L_cycles):
-            z_L = self.L_level(z_L, z_H + input_embeddings, **seq_info)
-        z_H = self.L_level(z_H, z_L, **seq_info)
+        if self.config.random_z_H:
+
+            B, S, D = z_H.shape
+            z_H = z_H.view(-1, D)  # (B*S, D)
+            mu = z_H.mean(dim=0)
+            cov = torch.cov(z_H.T)  # D x D
+            dist = torch.distributions.MultivariateNormal(mu, cov)
+            z_H = dist.sample((B*S,)).view(B, S, D)
+
+            with torch.no_grad():
+                for _H_step in range(self.config.H_cycles-1):
+                    for _L_step in range(self.config.L_cycles):
+                        z_L = self.L_level(z_L, z_H + input_embeddings, **seq_info)
+                    z_H = self.L_level(z_H, z_L, **seq_info)
+
+            z_H = z_H.view(-1, D)  # (B*S, D)
+            mu = z_H.mean(dim=0)
+            cov = torch.cov(z_H.T)  # D x D
+            dist = torch.distributions.MultivariateNormal(mu, cov)
+            z_H = dist.sample((B*S,)).view(B, S, D)
+            # 1 with grad
+            for _L_step in range(self.config.L_cycles):
+                z_L = self.L_level(z_L, z_H + input_embeddings, **seq_info)
+            z_H = self.L_level(z_H, z_L, **seq_info)            
+        else:
+            with torch.no_grad():
+                for _H_step in range(self.config.H_cycles-1):
+                    for _L_step in range(self.config.L_cycles):
+                        z_L = self.L_level(z_L, z_H + input_embeddings, **seq_info)
+                    z_H = self.L_level(z_H, z_L, **seq_info)
+            # 1 with grad
+            for _L_step in range(self.config.L_cycles):
+                z_L = self.L_level(z_L, z_H + input_embeddings, **seq_info)
+            z_H = self.L_level(z_H, z_L, **seq_info)
 
         # LM Outputs
         new_carry = TinyRecursiveReasoningModel_ACTV1InnerCarry(z_H=z_H.detach(), z_L=z_L.detach())  # New carry no grad
