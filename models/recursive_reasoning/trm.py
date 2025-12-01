@@ -206,7 +206,8 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
             z_H = dist.sample((B*S,)).view(B, S, D)
         return z_H
     
-    def forward(self, carry: TinyRecursiveReasoningModel_ACTV1InnerCarry, batch: Dict[str, torch.Tensor]) -> Tuple[TinyRecursiveReasoningModel_ACTV1InnerCarry, torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
+    def forward(self, carry: TinyRecursiveReasoningModel_ACTV1InnerCarry, batch: Dict[str, torch.Tensor], 
+                return_sequences: bool = False) -> Tuple[TinyRecursiveReasoningModel_ACTV1InnerCarry, torch.Tensor, Tuple[torch.Tensor, torch.Tensor], Optional[List[torch.Tensor]], Optional[List[torch.Tensor]]]:
         seq_info = dict(
             cos_sin=self.rotary_emb() if hasattr(self, "rotary_emb") else None,
         )
@@ -214,39 +215,59 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
         # Input encoding
         input_embeddings = self._input_embeddings(batch["inputs"], batch["puzzle_identifiers"])
 
+        # Initialize sequence tracking
+        z_H_sequence = [] if return_sequences else None
+        z_L_sequence = [] if return_sequences else None
+
         # Forward iterations
-        it = 0
         z_H, z_L = carry.z_H, carry.z_L
-        # H_cycles-1 without grad
+        
         if self.config.random_z_H:
             z_H = self.generate_random_z_H(z_H).to(z_L.device)
             with torch.no_grad():
                 for _H_step in range(self.config.H_cycles-1):
                     for _L_step in range(self.config.L_cycles):
                         z_L = self.L_level(z_L, z_H + input_embeddings, **seq_info)
+                        if return_sequences:
+                            z_L_sequence.append(z_L.detach().clone())
                     z_H = self.L_level(z_H, z_L, **seq_info)
+                    if return_sequences:
+                        z_H_sequence.append(z_H.detach().clone())
 
             z_H = self.generate_random_z_H(z_H).to(z_L.device)
             # 1 with grad
             for _L_step in range(self.config.L_cycles):
-                z_L = self.L_level(z_L, z_H + input_embeddings, **seq_info)          
-            z_H = self.L_level(z_H, z_L, **seq_info)            
+                z_L = self.L_level(z_L, z_H + input_embeddings, **seq_info)
+                if return_sequences:
+                    z_L_sequence.append(z_L.detach().clone())
+            z_H = self.L_level(z_H, z_L, **seq_info)
+            if return_sequences:
+                z_H_sequence.append(z_H.detach().clone())
         else:
             with torch.no_grad():
                 for _H_step in range(self.config.H_cycles-1):
                     for _L_step in range(self.config.L_cycles):
                         z_L = self.L_level(z_L, z_H + input_embeddings, **seq_info)
+                        if return_sequences:
+                            z_L_sequence.append(z_L.detach().clone())
                     z_H = self.L_level(z_H, z_L, **seq_info)
+                    if return_sequences:
+                        z_H_sequence.append(z_H.detach().clone())
             # 1 with grad
             for _L_step in range(self.config.L_cycles):
                 z_L = self.L_level(z_L, z_H + input_embeddings, **seq_info)
+                if return_sequences:
+                    z_L_sequence.append(z_L.detach().clone())
             z_H = self.L_level(z_H, z_L, **seq_info)
+            if return_sequences:
+                z_H_sequence.append(z_H.detach().clone())
 
         # LM Outputs
-        new_carry = TinyRecursiveReasoningModel_ACTV1InnerCarry(z_H=z_H.detach(), z_L=z_L.detach())  # New carry no grad
+        new_carry = TinyRecursiveReasoningModel_ACTV1InnerCarry(z_H=z_H.detach(), z_L=z_L.detach())
         output = self.lm_head(z_H)[:, self.puzzle_emb_len:]
-        q_logits = self.q_head(z_H[:, 0]).to(torch.float32) # Q-head; uses the first puzzle_emb position
-        return new_carry, output, (q_logits[..., 0], q_logits[..., 1])
+        q_logits = self.q_head(z_H[:, 0]).to(torch.float32)
+        
+        return new_carry, output, (q_logits[..., 0], q_logits[..., 1]), z_H_sequence, z_L_sequence
 
 
 class TinyRecursiveReasoningModel_ACTV1(nn.Module):
@@ -273,7 +294,8 @@ class TinyRecursiveReasoningModel_ACTV1(nn.Module):
             current_data={k: torch.empty_like(v) for k, v in batch.items()}
         )
         
-    def forward(self, carry: TinyRecursiveReasoningModel_ACTV1Carry, batch: Dict[str, torch.Tensor]) -> Tuple[TinyRecursiveReasoningModel_ACTV1Carry, Dict[str, torch.Tensor]]:
+    def forward(self, carry: TinyRecursiveReasoningModel_ACTV1Carry, batch: Dict[str, torch.Tensor], 
+            return_sequences: bool = False) -> Tuple[TinyRecursiveReasoningModel_ACTV1Carry, Dict[str, torch.Tensor]]:
 
         # Update data, carry (removing halted sequences)
         new_inner_carry = self.inner.reset_carry(carry.halted, carry.inner_carry)
@@ -283,13 +305,19 @@ class TinyRecursiveReasoningModel_ACTV1(nn.Module):
         new_current_data = {k: torch.where(carry.halted.view((-1, ) + (1, ) * (batch[k].ndim - 1)), batch[k], v) for k, v in carry.current_data.items()}
 
         # Forward inner model
-        new_inner_carry, logits, (q_halt_logits, q_continue_logits) = self.inner(new_inner_carry, new_current_data)
+        new_inner_carry, logits, (q_halt_logits, q_continue_logits), z_H_seq, z_L_seq = self.inner(
+            new_inner_carry, new_current_data, return_sequences=return_sequences
+        )
 
         outputs = {
             "logits": logits,
             "q_halt_logits": q_halt_logits,
             "q_continue_logits": q_continue_logits
         }
+        
+        if return_sequences:
+            outputs["z_H_sequence"] = z_H_seq
+            outputs["z_L_sequence"] = z_L_seq
 
         with torch.no_grad():
             # Step
