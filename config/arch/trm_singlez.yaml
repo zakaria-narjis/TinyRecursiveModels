@@ -26,4 +26,4 @@ puzzle_emb_len: 16 # if non-zero, its specified to this value
 no_ACT_continue: True # No continue ACT loss, only use the sigmoid of the halt which makes much more sense
 
 last_outer_loop: True # whether to do an extra L step without input at the end of each H cycle
-random_z_H: True
+random_z_H: False
