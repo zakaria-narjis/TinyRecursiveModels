@@ -461,12 +461,14 @@ def grid_search():
     
     # Define experiments
     experiments = [
-        {"halt_max_steps": 4, "H_cycles": 3, "L_cycles": 6},
-        {"halt_max_steps": 8, "H_cycles": 3, "L_cycles": 6},
-        {"halt_max_steps": 16, "H_cycles": 3, "L_cycles": 6},
-        {"halt_max_steps": 32, "H_cycles": 3, "L_cycles": 6},
-        {"halt_max_steps": 48, "H_cycles": 3, "L_cycles": 6},
-        {"halt_max_steps": 64, "H_cycles": 3, "L_cycles": 6},
+        {"halt_max_steps": 1, "H_cycles": 1, "L_cycles": 1},
+        {"halt_max_steps": 1, "H_cycles": 3, "L_cycles": 4},
+        {"halt_max_steps": 4, "H_cycles": 3, "L_cycles": 4},
+        {"halt_max_steps": 8, "H_cycles": 3, "L_cycles": 4},
+        {"halt_max_steps": 16, "H_cycles": 3, "L_cycles": 4},
+        {"halt_max_steps": 32, "H_cycles": 3, "L_cycles": 4},
+        {"halt_max_steps": 48, "H_cycles": 3, "L_cycles": 4},
+        {"halt_max_steps": 64, "H_cycles": 3, "L_cycles": 4},
     ]
     BATCH_SIZE = 256*5
     
