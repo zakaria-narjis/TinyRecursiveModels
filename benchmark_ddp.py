@@ -21,8 +21,8 @@ from models.losses import IGNORE_LABEL_ID
 # ============================================================================
 # Configuration
 # ============================================================================
-CHECKPOINT_PATH = "/home/zakarianarjis/workspace/TinyRecursiveModels/checkpoints/Maze-30x30-hard-1k-ACT-torch/pretrain_att_maze30x30/step_65100"
-# CHECKPOINT_PATH = "/home/zakarianarjis/workspace/TinyRecursiveModels/checkpoints/Sudoku-extreme-1k-aug-1000-ACT-torch/pretrain_mlp_t_sudoku/step_65100"
+CHECKPOINT_PATH = "checkpoints/Maze-30x30-hard-1k-ACT-torch/pretrain_att_maze30x30/step_65100"
+# CHECKPOINT_PATH = "checkpoints/Sudoku-extreme-1k-aug-1000-ACT-torch/pretrain_mlp_t_sudoku/step_65100"
 DATA_PATH = "data/maze-30x30-hard-1k"
 # DATA_PATH = "data/sudoku-extreme-1k-aug-1000"
 
