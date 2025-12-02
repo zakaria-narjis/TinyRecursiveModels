@@ -81,7 +81,7 @@ def load_model_from_checkpoint(checkpoint_path: str, config_overrides: Dict[str,
     loss_config = arch_config["loss"].copy()
     loss_name = loss_config["name"]
     
-    # Apply overrides
+    # Apply overrides BEFORE creating model
     for key, value in config_overrides.items():
         if key in arch_config:
             arch_config[key] = value
@@ -417,14 +417,17 @@ def evaluate_with_config(
     loss_head_cls = load_model_class(loss_name)
     
     with torch.device(device):
+        # Create model with OVERRIDDEN config
         model = model_cls(model_cfg)
+        
         if rank == 0:
-            print(f"\nBase model architecture:")
+            print(f"\nBase model architecture (WITH OVERRIDES):")
             print(f"  Hidden size: {model_cfg.get('hidden_size', 'N/A')}")
             print(f"  Num heads: {model_cfg.get('num_heads', 'N/A')}")
             print(f"  H_cycles: {model_cfg.get('H_cycles', 'N/A')}")
             print(f"  L_cycles: {model_cfg.get('L_cycles', 'N/A')}")
             print(f"  L_layers: {model_cfg.get('L_layers', 'N/A')}")
+            print(f"  halt_max_steps: {model_cfg.get('halt_max_steps', 'N/A')}")
         
         model = loss_head_cls(model, **loss_kwargs)
         
@@ -434,20 +437,14 @@ def evaluate_with_config(
         # Strip _orig_mod. prefix if present (from torch.compile)
         state_dict = strip_compiled_prefix(state_dict)
         
-        # Try to load with strict=True
-        try:
-            model.load_state_dict(state_dict, strict=True)
-            if rank == 0:
-                print("✓ Weights loaded successfully (strict mode)")
-        except Exception as e:
-            if rank == 0:
-                print(f"⚠ Warning: Could not load with strict=True: {e}")
-            missing_keys, unexpected_keys = model.load_state_dict(state_dict, strict=False)
-            if rank == 0:
-                if missing_keys:
-                    print(f"  Missing keys: {missing_keys[:5]}{'...' if len(missing_keys) > 5 else ''}")
-                if unexpected_keys:
-                    print(f"  Unexpected keys: {unexpected_keys[:5]}{'...' if len(unexpected_keys) > 5 else ''}")
+        # Load with strict=False to allow architecture changes
+        missing_keys, unexpected_keys = model.load_state_dict(state_dict, strict=False)
+        if rank == 0:
+            print("✓ Weights loaded (non-strict mode to allow config changes)")
+            if missing_keys:
+                print(f"  ⚠ Missing keys: {missing_keys[:5]}{'...' if len(missing_keys) > 5 else ''}")
+            if unexpected_keys:
+                print(f"  ⚠ Unexpected keys: {unexpected_keys[:5]}{'...' if len(unexpected_keys) > 5 else ''}")
         
         if compile_model and "DISABLE_COMPILE" not in os.environ:
             if rank == 0:
@@ -538,6 +535,9 @@ def grid_search(rank: int, world_size: int, local_rank: int, cpu_group):
         # Synchronize after experiment
         if world_size > 1:
             dist.barrier()
+        
+        # Clean up model to free memory
+        torch.cuda.empty_cache()
     
     if rank == 0:
         print("\n\n" + "=" * 100)
