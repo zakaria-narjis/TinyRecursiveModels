@@ -230,7 +230,8 @@ def run_inference_ddp(
             batch = {k: v.to(device) for k, v in batch.items()}
             
             # Init Carry
-            carry = model.initial_carry(batch)
+            with torch.device("cuda"):
+                carry = model.initial_carry(batch)
             
             # Inference Loop
             inference_steps = 0
