@@ -21,44 +21,52 @@ from models.losses import IGNORE_LABEL_ID
 # Configuration
 # ============================================================================
 
-# CHECKPOINT_PATH = "checkpoints/Sudoku-extreme-1k-aug-1000-ACT-torch/pretrain_mlp_t_sudoku/step_65100"
-# DATA_PATH = "data/sudoku-extreme-1k-aug-1000"
+# Use your actual paths here
 CHECKPOINT_PATH = "checkpoints/Maze-30x30-hard-1k-ACT-torch/pretrain_att_maze30x30/step_65100"
 DATA_PATH = "data/maze-30x30-hard-1k"
+
+# Global DDP variables, set once
+GLOBAL_RANK = 0
+LOCAL_RANK = 0
+WORLD_SIZE = 1
+
 # ============================================================================
 # DDP Helper Functions
 # ============================================================================
 
 def setup_ddp():
     """Initialize Distributed Data Parallel."""
-    if "LOCAL_RANK" in os.environ:
+    global GLOBAL_RANK, LOCAL_RANK, WORLD_SIZE
+    
+    if "LOCAL_RANK" in os.environ and not dist.is_initialized():
+        # Initialize only if environment variables are set and not already initialized
         dist.init_process_group(backend="nccl")
-        local_rank = int(os.environ["LOCAL_RANK"])
-        torch.cuda.set_device(local_rank)
-        global_rank = dist.get_rank()
-        world_size = dist.get_world_size()
-        return global_rank, local_rank, world_size
-    else:
-        # Fallback for single GPU/No torchrun
-        print("Not running in DDP mode. Using single GPU.")
-        return 0, 0, 1
-
-def cleanup_ddp():
-    """Destroy process group."""
-    if dist.is_initialized():
-        dist.destroy_process_group()
+        LOCAL_RANK = int(os.environ["LOCAL_RANK"])
+        torch.cuda.set_device(LOCAL_RANK)
+        GLOBAL_RANK = dist.get_rank()
+        WORLD_SIZE = dist.get_world_size()
+    elif not dist.is_initialized():
+        # Fallback for single GPU/No torchrun (only use first GPU)
+        if torch.cuda.is_available():
+            torch.cuda.set_device(0)
+            LOCAL_RANK = 0
+        GLOBAL_RANK = 0
+        WORLD_SIZE = 1
+        
+    # IMPORTANT: Return the currently set global variables
+    return GLOBAL_RANK, LOCAL_RANK, WORLD_SIZE
 
 def is_main_process():
-    return not dist.is_initialized() or dist.get_rank() == 0
+    """Check if the current process is rank 0."""
+    return GLOBAL_RANK == 0
 
 # ============================================================================
-# Loading Helpers
+# Loading Helpers (Moved logic outside of functions to use GLOBAL_RANK/WORLD_SIZE)
 # ============================================================================
 
 def load_model_from_checkpoint(checkpoint_path: str, config_overrides: Dict[str, Any] = None):
     """Load model from checkpoint with optional config overrides."""
     
-    # Load the config from the checkpoint directory
     config_file = os.path.join(os.path.dirname(checkpoint_path), "all_config.yaml")
     
     with open(config_file, "r") as f:
@@ -116,11 +124,10 @@ def strip_compiled_prefix(state_dict):
     return new_state_dict
 
 
-def create_eval_dataset(data_path: str, batch_size: int, rank: int, world_size: int, split: str = "test"):
-    """Create evaluation dataset with DDP sharding."""
+def create_eval_dataset(data_path: str, batch_size: int):
+    """Create evaluation dataset with DDP sharding using global variables."""
     
     # PuzzleDataset handles sharding internally via rank/num_replicas
-    # and expects global_batch_size
     dataset = PuzzleDataset(
         PuzzleDatasetConfig(
             seed=0,
@@ -128,10 +135,11 @@ def create_eval_dataset(data_path: str, batch_size: int, rank: int, world_size: 
             global_batch_size=batch_size,
             test_set_mode=True,
             epochs_per_iter=1,
-            rank=rank,
-            num_replicas=world_size,
+            # Use global DDP variables here
+            rank=GLOBAL_RANK, 
+            num_replicas=WORLD_SIZE,
         ),
-        split=split
+        split="test"
     )
     
     return dataset, dataset.metadata
@@ -172,11 +180,20 @@ def compute_metrics(logits: torch.Tensor, labels: torch.Tensor) -> Dict[str, flo
         "num_correct_sequences": num_correct_sequences,
     }
 
+# Helper to move nested dict/object structure to device
+def move_to_device(data: Any, device: torch.device):
+    if isinstance(data, torch.Tensor):
+        return data.to(device)
+    elif isinstance(data, dict):
+        return {k: move_to_device(v, device) for k, v in data.items()}
+    elif isinstance(data, list):
+        return [move_to_device(v, device) for v in data]
+    return data
 
 def run_inference_ddp(
     model: nn.Module,
     dataset: PuzzleDataset,
-    device: str = "cuda",
+    device: torch.device,
     max_batches: int = None
 ) -> Dict[str, Any]:
     """Run inference on the dataset and compute distributed metrics."""
@@ -189,17 +206,10 @@ def run_inference_ddp(
         "num_valid_tokens": 0.0,
         "num_correct_sequences": 0.0,
         "num_sequences": 0.0,
-        "sum_inference_steps": 0.0, # Sum of steps for all batches
+        "sum_inference_steps": 0.0,
         "num_batches": 0.0
     }
     
-    # Store per-batch metrics locally to match original output format structure
-    # Note: In DDP, gathering all per-batch metrics to rank 0 can be heavy.
-    # We will just return local ones and note that 'per_batch_metrics' in final output
-    # will only contain the batches processed by the specific rank unless gathered.
-    # To keep exact same JSON output, we will likely strip this field or just keep local.
-    # The requirement says "same content", but aggregating thousands of batch dicts 
-    # across nodes is usually discouraged. We will compute accurate GLOBAL averages.
     local_per_batch_metrics = []
 
     batch_count = 0
@@ -213,31 +223,31 @@ def run_inference_ddp(
             
             try:
                 # PuzzleDataset yields (set_name, batch, global_batch_size)
-                # In DDP mode, 'batch' is already sliced for this rank
                 batch_data = next(dataset_iter)
-                set_name, batch, _ = batch_data # ignore the yielded global_size, use actual tensor size
+                set_name, batch, _ = batch_data 
                 
             except StopIteration:
                 break
             except Exception as e:
-                print(f"[Rank {dist.get_rank()}] Error fetching batch: {e}")
+                if is_main_process():
+                    print(f"Error fetching batch: {e}")
                 break
             
             batch_count += 1
-            batch_size = batch['inputs'].shape[0]
             
             # To device
-            batch = {k: v.to(device) for k, v in batch.items()}
+            batch = move_to_device(batch, device)
             
-            # Init Carry
-            with torch.device("cuda"):
-                carry = model.initial_carry(batch)
+            # Init Carry - **FIXED: Ensure initial_carry output is also moved to device.**
+            carry = model.initial_carry(batch)
+            carry = move_to_device(carry, device) # Crucial fix for "cpu and cuda" error
             
             # Inference Loop
             inference_steps = 0
-            max_inference_steps = 100
+            max_inference_steps = 100 # Safety limit
             
             while True:
+                # model() is expected to return tensors on the input's device (CUDA)
                 carry, loss, metrics, preds, all_finish = model(
                     carry=carry, 
                     batch=batch, 
@@ -245,6 +255,11 @@ def run_inference_ddp(
                 )
                 inference_steps += 1
                 
+                # 'all_finish' can be a boolean or a tensor. If it's a tensor, 
+                # ensure comparison is done correctly (it should be reduced to a single value here).
+                if isinstance(all_finish, torch.Tensor):
+                    all_finish = all_finish.all().item()
+                    
                 if all_finish or inference_steps >= max_inference_steps:
                     break
             
@@ -252,6 +267,7 @@ def run_inference_ddp(
             logits = preds["logits"]
             labels = batch["labels"]
             
+            # Ensure labels are also on the device, already handled by move_to_device(batch)
             batch_m = compute_metrics(logits, labels)
             
             # Update local accumulators
@@ -262,7 +278,7 @@ def run_inference_ddp(
             local_metrics["sum_inference_steps"] += inference_steps
             local_metrics["num_batches"] += 1
             
-            # Store detail for this batch
+            # Store detail for this batch (optional for full json, but good for debugging)
             detail = {
                 "token_accuracy": batch_m["token_accuracy"],
                 "exact_accuracy": batch_m["exact_accuracy"],
@@ -292,7 +308,7 @@ def run_inference_ddp(
     ], dtype=torch.float64, device=device)
     
     # Sum up everything from all GPUs
-    if dist.is_initialized():
+    if WORLD_SIZE > 1:
         dist.all_reduce(metrics_tensor, op=dist.ReduceOp.SUM)
         
     # Extract global values
@@ -316,9 +332,8 @@ def run_inference_ddp(
         "total_valid_tokens": int(global_valid_tok),
         "total_sequences": int(global_total_seq),
         "total_correct_sequences": int(global_correct_seq),
-        # In DDP, we don't return the massive list of per-batch metrics to save bandwidth
-        # We return an empty list or local list to satisfy the return signature, 
-        # but the logic below strips it before saving anyway.
+        # This list will only contain batches processed by this specific rank.
+        # We keep it for consistency but strip it before saving.
         "per_batch_metrics": local_per_batch_metrics 
     }
 
@@ -338,12 +353,11 @@ def evaluate_with_config(
 ):
     """Evaluate model with custom hyperparameters using DDP."""
     
-    global_rank, local_rank, world_size = setup_ddp()
-    device = torch.device(f"cuda:{local_rank}")
+    device = torch.device(f"cuda:{LOCAL_RANK}")
     
     if is_main_process():
         print("=" * 80)
-        print(f"EVALUATION CONFIGURATION (DDP World Size: {world_size})")
+        print(f"EVALUATION CONFIGURATION (DDP World Size: {WORLD_SIZE})")
         print("=" * 80)
         print(f"Checkpoint: {checkpoint_path}")
         print(f"Data Path: {data_path}")
@@ -368,8 +382,8 @@ def evaluate_with_config(
     if is_main_process():
         print("\nLoading dataset...")
     
-    # IMPORTANT: Pass rank and world_size to dataset to handle sharding
-    dataset, metadata = create_eval_dataset(data_path, batch_size, global_rank, world_size)
+    # IMPORTANT: The dataset creation uses the globally set rank/world_size
+    dataset, metadata = create_eval_dataset(data_path, batch_size)
     
     # Update model config
     model_cfg["vocab_size"] = metadata.vocab_size
@@ -377,7 +391,7 @@ def evaluate_with_config(
     model_cfg["num_puzzle_identifiers"] = metadata.num_puzzle_identifiers
     
     if is_main_process():
-        print(f"Dataset loaded. Total puzzles: {metadata.total_puzzles}")
+        print(f"Dataset loaded. Total puzzles: {metadata.total_puzzles}. Sharded elements for this rank.")
         print("\nLoading model...")
     
     model_cls = load_model_class(model_name)
@@ -411,14 +425,15 @@ def evaluate_with_config(
         print("=" * 80)
     
     # Synchronize before starting timing
-    if dist.is_initialized():
+    if WORLD_SIZE > 1:
         dist.barrier()
         
     start_time = time.time()
     
+    # Run inference on the specified device for this rank
     results = run_inference_ddp(model, dataset, device=device, max_batches=max_batches)
     
-    if dist.is_initialized():
+    if WORLD_SIZE > 1:
         dist.barrier()
     
     total_time = time.time() - start_time
@@ -444,7 +459,7 @@ def evaluate_with_config(
 def grid_search():
     """Run grid search over hyperparameters."""
     
-    # Same experiments as original
+    # Define experiments
     experiments = [
         {"halt_max_steps": 4, "H_cycles": 3, "L_cycles": 6},
         {"halt_max_steps": 8, "H_cycles": 3, "L_cycles": 6},
@@ -454,7 +469,11 @@ def grid_search():
         {"halt_max_steps": 64, "H_cycles": 3, "L_cycles": 6},
     ]
     BATCH_SIZE = 256*5
+    
     all_results = []
+    
+    if is_main_process():
+        print("STARTING GRID SEARCH...")
     
     for exp_config in experiments:
         if is_main_process():
@@ -465,14 +484,16 @@ def grid_search():
         results = evaluate_with_config(
             checkpoint_path=CHECKPOINT_PATH,
             data_path=DATA_PATH,
-            batch_size=BATCH_SIZE, # Ensure this is divisible by world_size ideally, but PuzzleDataset handles remainder
+            batch_size=BATCH_SIZE, 
             max_batches=None,
             compile_model=False,
             **exp_config
         )
         
-        results["config"] = exp_config
-        all_results.append(results)
+        # Only rank 0 collects and saves the results
+        if is_main_process():
+            results["config"] = exp_config
+            all_results.append(results)
     
     # Save results (Rank 0 only)
     if is_main_process():
@@ -487,7 +508,7 @@ def grid_search():
             results_to_save.append(clean_res)
             
         # Construct filename with dataset name
-        dataset_name = os.path.basename(os.path.normpath(DATA_PATH))
+        dataset_name = os.path.basename(os.path.normpath(DATA_PATH)).split('-')[0] # e.g., 'Maze' or 'Sudoku'
         save_filename = f"{dataset_name}_grid_search_results.json"
         
         print(f"Saving summary of results to {save_filename}...")
@@ -502,9 +523,11 @@ def grid_search():
     return all_results
 
 if __name__ == "__main__":
-    # Ensure setup is called implicitly via evaluate_with_config or explicitly here
-    # We call it inside evaluate to ensure clean scope, but for logic flow:
-    try:
-        grid_search()
-    finally:
-        cleanup_ddp()
+    # 1. Initialize DDP/set global variables ONCE at the very start
+    setup_ddp() 
+    
+    # 2. Run the main logic
+    grid_search()
+    
+    # 3. torchrun handles cleanup, so we remove dist.destroy_process_group()
+
