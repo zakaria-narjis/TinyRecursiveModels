@@ -446,9 +446,14 @@ def grid_search():
     
     # Same experiments as original
     experiments = [
-        {"halt_max_steps": 32, "H_cycles": 32, "L_cycles": 2},
+        {"halt_max_steps": 4, "H_cycles": 3, "L_cycles": 6},
+        {"halt_max_steps": 8, "H_cycles": 3, "L_cycles": 6},
+        {"halt_max_steps": 16, "H_cycles": 3, "L_cycles": 6},
+        {"halt_max_steps": 32, "H_cycles": 3, "L_cycles": 6},
+        {"halt_max_steps": 48, "H_cycles": 3, "L_cycles": 6},
+        {"halt_max_steps": 64, "H_cycles": 3, "L_cycles": 6},
     ]
-    
+    BATCH_SIZE = 256*5
     all_results = []
     
     for exp_config in experiments:
@@ -460,7 +465,7 @@ def grid_search():
         results = evaluate_with_config(
             checkpoint_path=CHECKPOINT_PATH,
             data_path=DATA_PATH,
-            batch_size=1024, # Ensure this is divisible by world_size ideally, but PuzzleDataset handles remainder
+            batch_size=BATCH_SIZE, # Ensure this is divisible by world_size ideally, but PuzzleDataset handles remainder
             max_batches=None,
             compile_model=False,
             **exp_config
