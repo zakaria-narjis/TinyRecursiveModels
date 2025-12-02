@@ -497,9 +497,14 @@ def grid_search(rank: int, world_size: int, local_rank: int, cpu_group):
     """Run grid search over hyperparameters."""
     
     device = f"cuda:{local_rank}"
-    
+    BATCH_SIZE = 256*5
     experiments = [
-        {"halt_max_steps": 32, "H_cycles": 32, "L_cycles": 2},
+        {"halt_max_steps": 2, "H_cycles": 3, "L_cycles": 6},
+        {"halt_max_steps": 4, "H_cycles": 3, "L_cycles": 6},
+        {"halt_max_steps": 8, "H_cycles": 3, "L_cycles": 6},
+        {"halt_max_steps": 16, "H_cycles": 3, "L_cycles": 6},
+        {"halt_max_steps": 32, "H_cycles": 3, "L_cycles": 6},
+        {"halt_max_steps": 64, "H_cycles": 3, "L_cycles": 6},
     ]
     
     all_results = []
@@ -517,7 +522,7 @@ def grid_search(rank: int, world_size: int, local_rank: int, cpu_group):
         results = evaluate_with_config(
             checkpoint_path=CHECKPOINT_PATH,
             data_path=DATA_PATH,
-            batch_size=1024,
+            batch_size=BATCH_SIZE,
             max_batches=None,  # Full evaluation
             device=device,
             rank=rank,
