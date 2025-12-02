@@ -238,9 +238,9 @@ def run_inference_ddp(
             # To device
             batch = move_to_device(batch, device)
             
-            # Init Carry - **FIXED: Ensure initial_carry output is also moved to device.**
-            carry = model.initial_carry(batch)
-            carry = move_to_device(carry, device) # Crucial fix for "cpu and cuda" error
+            # Init Carry
+            with torch.device("cuda"):
+                carry = model.initial_carry(batch)
             
             # Inference Loop
             inference_steps = 0
