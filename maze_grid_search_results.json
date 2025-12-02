@@ -1,0 +1,114 @@
+[
+    {
+        "token_accuracy": 0.8738633333333333,
+        "exact_accuracy": 0.21875,
+        "avg_inference_steps": 1.0,
+        "num_batches": 4,
+        "total_valid_tokens": 900000,
+        "total_sequences": 1280,
+        "total_correct_sequences": 280,
+        "config": {
+            "halt_max_steps": 1,
+            "H_cycles": 1,
+            "L_cycles": 1
+        }
+    },
+    {
+        "token_accuracy": 0.9938688888888889,
+        "exact_accuracy": 0.8265625,
+        "avg_inference_steps": 1.0,
+        "num_batches": 4,
+        "total_valid_tokens": 900000,
+        "total_sequences": 1280,
+        "total_correct_sequences": 1058,
+        "config": {
+            "halt_max_steps": 1,
+            "H_cycles": 3,
+            "L_cycles": 4
+        }
+    },
+    {
+        "token_accuracy": 0.9947255555555555,
+        "exact_accuracy": 0.87421875,
+        "avg_inference_steps": 4.0,
+        "num_batches": 4,
+        "total_valid_tokens": 900000,
+        "total_sequences": 1280,
+        "total_correct_sequences": 1119,
+        "config": {
+            "halt_max_steps": 4,
+            "H_cycles": 3,
+            "L_cycles": 4
+        }
+    },
+    {
+        "token_accuracy": 0.9947255555555555,
+        "exact_accuracy": 0.87421875,
+        "avg_inference_steps": 8.0,
+        "num_batches": 4,
+        "total_valid_tokens": 900000,
+        "total_sequences": 1280,
+        "total_correct_sequences": 1119,
+        "config": {
+            "halt_max_steps": 8,
+            "H_cycles": 3,
+            "L_cycles": 4
+        }
+    },
+    {
+        "token_accuracy": 0.9947255555555555,
+        "exact_accuracy": 0.87421875,
+        "avg_inference_steps": 16.0,
+        "num_batches": 4,
+        "total_valid_tokens": 900000,
+        "total_sequences": 1280,
+        "total_correct_sequences": 1119,
+        "config": {
+            "halt_max_steps": 16,
+            "H_cycles": 3,
+            "L_cycles": 4
+        }
+    },
+    {
+        "token_accuracy": 0.9947255555555555,
+        "exact_accuracy": 0.87421875,
+        "avg_inference_steps": 32.0,
+        "num_batches": 4,
+        "total_valid_tokens": 900000,
+        "total_sequences": 1280,
+        "total_correct_sequences": 1119,
+        "config": {
+            "halt_max_steps": 32,
+            "H_cycles": 3,
+            "L_cycles": 4
+        }
+    },
+    {
+        "token_accuracy": 0.9947255555555555,
+        "exact_accuracy": 0.87421875,
+        "avg_inference_steps": 48.0,
+        "num_batches": 4,
+        "total_valid_tokens": 900000,
+        "total_sequences": 1280,
+        "total_correct_sequences": 1119,
+        "config": {
+            "halt_max_steps": 48,
+            "H_cycles": 3,
+            "L_cycles": 4
+        }
+    },
+    {
+        "token_accuracy": 0.9947255555555555,
+        "exact_accuracy": 0.87421875,
+        "avg_inference_steps": 64.0,
+        "num_batches": 4,
+        "total_valid_tokens": 900000,
+        "total_sequences": 1280,
+        "total_correct_sequences": 1119,
+        "config": {
+            "halt_max_steps": 64,
+            "H_cycles": 3,
+            "L_cycles": 4
+        }
+    }
+]
