@@ -226,7 +226,7 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
         if self.config.martinetz_method:
             with torch.no_grad():
                 for _H_step in range(self.config.H_cycles-1):
-                    z_L = torch.zeros(self.config.hidden_size, dtype=self.forward_dtype) # We start we an empty zL whiteboard
+                    z_L = torch.zeros(self.config.hidden_size, dtype=self.forward_dtype, device=z_H.device) # We start we an empty zL whiteboard
                     for _L_step in range(self.config.L_cycles):                        
                         z_L = self.L_level(z_L, z_H + input_embeddings, **seq_info)
                         if return_sequences:
@@ -235,14 +235,14 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
                     if return_sequences:
                         z_H_sequence.append(z_H.detach().clone())
             # 1 with grad
-            z_L = torch.zeros(self.config.hidden_size, dtype=self.forward_dtype)
+            z_L = torch.zeros(self.config.hidden_size, dtype=self.forward_dtype, device=z_H.device)
             for _L_step in range(self.config.L_cycles):
                 z_L = self.L_level(z_L, z_H + input_embeddings, **seq_info)
                 if return_sequences:
                     z_L_sequence.append(z_L.detach().clone())
             z_H += z_L # ZL(L_cycles)+ZL(2*L_cycles)..+ZL(H_cycles*L_cycles)
             z_H = rms_norm(z_H)
-            z_L = torch.zeros(self.config.hidden_size, dtype=self.forward_dtype)
+            z_L = torch.zeros(self.config.hidden_size, dtype=self.forward_dtype, device=z_H.device)
             if return_sequences:
                 z_H_sequence.append(z_H.detach().clone())
             final_embed = z_H + input_embeddings
