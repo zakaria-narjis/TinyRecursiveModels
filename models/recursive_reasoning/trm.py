@@ -241,7 +241,7 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
                 if return_sequences:
                     z_L_sequence.append(z_L.detach().clone())
             z_H += z_L # ZL(L_cycles)+ZL(2*L_cycles)..+ZL(H_cycles*L_cycles)
-            z_H = rms_norm(z_H)
+            z_H = rms_norm(z_H,variance_epsilon=self.norm_eps)
             z_L = torch.zeros(self.config.hidden_size, dtype=self.forward_dtype, device=z_H.device)
             if return_sequences:
                 z_H_sequence.append(z_H.detach().clone())
