@@ -1,0 +1,54 @@
+[
+    {
+        "ARC/pass@1": 0.14,
+        "ARC/pass@2": 0.175,
+        "ARC/pass@5": 0.19625,
+        "ARC/pass@10": 0.21875,
+        "ARC/pass@100": 0.265,
+        "ARC/pass@1000": 0.2825,
+        "config": {
+            "halt_max_steps": 1,
+            "H_cycles": 1,
+            "L_cycles": 6
+        }
+    },
+    {
+        "ARC/pass@1": 0.3225,
+        "ARC/pass@2": 0.37,
+        "ARC/pass@5": 0.4225,
+        "ARC/pass@10": 0.4475,
+        "ARC/pass@100": 0.49375,
+        "ARC/pass@1000": 0.5025,
+        "config": {
+            "halt_max_steps": 1,
+            "H_cycles": 2,
+            "L_cycles": 6
+        }
+    },
+    {
+        "ARC/pass@1": 0.3925,
+        "ARC/pass@2": 0.44625,
+        "ARC/pass@5": 0.4925,
+        "ARC/pass@10": 0.51625,
+        "ARC/pass@100": 0.57625,
+        "ARC/pass@1000": 0.58375,
+        "config": {
+            "halt_max_steps": 1,
+            "H_cycles": 3,
+            "L_cycles": 6
+        }
+    },
+    {
+        "ARC/pass@1": 0.42,
+        "ARC/pass@2": 0.465,
+        "ARC/pass@5": 0.5,
+        "ARC/pass@10": 0.52375,
+        "ARC/pass@100": 0.59,
+        "ARC/pass@1000": 0.605,
+        "config": {
+            "halt_max_steps": 1,
+            "H_cycles": 4,
+            "L_cycles": 6
+        }
+    }
+]

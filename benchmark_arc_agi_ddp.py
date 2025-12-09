@@ -364,7 +364,10 @@ def grid_search(rank, world_size, local_rank, cpu_group):
     BATCH_SIZE = 192 * 5 * 2
     
     experiments = [
-        {"halt_max_steps": 1, "H_cycles": 6, "L_cycles": 12},
+        {"halt_max_steps": 1, "H_cycles": 1, "L_cycles": 6},
+        {"halt_max_steps": 1, "H_cycles": 2, "L_cycles": 6},
+        {"halt_max_steps": 1, "H_cycles": 3, "L_cycles": 6},
+        {"halt_max_steps": 1, "H_cycles": 4, "L_cycles": 6},
         # Add more experiments here
     ]
     
